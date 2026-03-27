@@ -206,16 +206,76 @@ function startReply(senderName, msgContent) {
 }
 function cancelReply() { replyingTo = null; document.getElementById('replyContext').style.display = 'none'; }
 
-// ⚠️ FIXED: IMAGE AND VOICE URL GENERATOR
-function getSecureMediaUrl(fileId, type) {
-    if (type === 'image') {
-        // Chobir jonno Google Drive er Thumbnail API (Direct load hobe)
-        return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+
+// ==========================================
+// 🚀 100% SECURE MEDIA LOAD SYSTEM (2-Min Token)
+// ==========================================
+
+// Server theke shudhu matro 2 minuter jonno ekti gopon link nibe
+async function fetchSecureLink(fileId) {
+    try {
+        const res = await fetch('/api/media/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ fileId })
+        });
+        const data = await res.json();
+        return data.url; // ETA GOOGLE DRIVE ER LINK NOY, ETA VERCEL ER HIDDEN LINK
+    } catch(e) { return null; }
+}
+
+// User jokhon blur image-e click korbe tokhon ei function cholbe
+async function revealImage(fileId, mediaId) {
+    const textEl = document.getElementById('text_' + mediaId);
+    const imgEl = document.getElementById('img_' + mediaId);
+    const boxEl = document.getElementById('box_' + mediaId);
+    
+    textEl.innerText = "⏳ Decrypting...";
+    
+    const secureUrl = await fetchSecureLink(fileId);
+    if(secureUrl) {
+        imgEl.onload = () => {
+            imgEl.style.filter = "none";
+            textEl.style.display = "none";
+            boxEl.style.height = "auto";
+            boxEl.style.background = "transparent";
+            boxEl.onclick = () => openViewer(secureUrl); // Now opens full screen
+        };
+        imgEl.src = secureUrl;
     } else {
-        // Voice er jonno Raw Download API
-        return `https://drive.google.com/uc?export=download&id=${fileId}`;
+        textEl.innerText = "❌ Failed";
     }
 }
+
+// Voice note er play button e click korle eita cholbe
+async function playSecureAudio(fileId, mediaId) {
+    const audio = document.getElementById(mediaId);
+    const icon = document.getElementById('icon_' + mediaId);
+    
+    // Onno kono voice chalano thakle ta bondho korbe
+    document.querySelectorAll('audio').forEach(a => { if(a.id !== mediaId && !a.paused) { a.pause(); document.getElementById('icon_' + a.id).innerText = "▶"; } });
+
+    if (audio.paused) {
+        // Jodi audio r kono source na thake (mane ekhono token ney ni)
+        if (!audio.src || audio.src === window.location.href || audio.src.endsWith('/null')) {
+            icon.innerText = "⏳";
+            const secureUrl = await fetchSecureLink(fileId);
+            if (secureUrl) {
+                audio.src = secureUrl;
+                audio.play().then(() => { icon.innerText = "⏸"; }).catch(e=> { icon.innerText = "▶"; });
+            } else icon.innerText = "❌";
+        } else {
+            audio.play(); icon.innerText = "⏸";
+        }
+    } else {
+        audio.pause(); icon.innerText = "▶";
+    }
+}
+
+function updateChatAudio(id) { const audio = document.getElementById(id); if(!isNaN(audio.duration)) { document.getElementById('prog_' + id).style.width = ((audio.currentTime / audio.duration) * 100) + '%'; document.getElementById('time_' + id).innerText = formatTime(audio.currentTime); } }
+function setAudioDuration(id) { const audio = document.getElementById(id); const timeSpan = document.getElementById('time_' + id); if (!audio || !timeSpan) return; if (isFinite(audio.duration)) { timeSpan.innerText = formatTime(audio.duration); } }
+function seekChatAudio(e, id) { const audio = document.getElementById(id); const rect = e.currentTarget.getBoundingClientRect(); if(isFinite(audio.duration)) audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration; }
+function resetChatAudio(id) { document.getElementById('icon_' + id).innerText = "▶"; document.getElementById('prog_' + id).style.width = '0%'; setAudioDuration(id); }
 
 function appendMessage(data) {
     const box = document.getElementById('chatBox');
@@ -226,38 +286,45 @@ function appendMessage(data) {
     div.style.alignItems = isMe ? 'flex-end' : 'flex-start';
     let bgColor = isMe ? '#0084ff' : '#fff', textColor = isMe ? 'white' : 'black', nameColor = isMe ? '#e0f0ff' : '#0084ff';
     
-    let content = `<div class="msg" style="background: ${bgColor}; color: ${textColor};">`;
-    content += `<div class="reply-icon-bg">↩️</div>`;
+    let content = `<div class="msg" style="background: ${bgColor}; color: ${textColor}; padding: 10px; border-radius: 12px; max-width: 80%; position: relative;">`;
+    content += `<div class="reply-icon-bg" style="position: absolute; right: ${isMe ? 'auto' : '-30px'}; left: ${isMe ? '-30px' : 'auto'}; top: 50%; transform: translateY(-50%); opacity: 0;">↩️</div>`;
 
     if(data.replyTo) {
         const qColor = isMe ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.05)';
         const qBorder = isMe ? '#fff' : '#0084ff';
-        content += `<div class="reply-quote" style="background: ${qColor}; border-left-color: ${qBorder};">
-                        <div class="reply-quote-name" style="color: ${isMe?'#fff':'#0084ff'}">${data.replyTo.sender}</div>
-                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;">${data.replyTo.message}</div>
+        content += `<div class="reply-quote" style="background: ${qColor}; border-left-color: ${qBorder}; padding: 5px; margin-bottom: 5px; border-radius: 5px; font-size: 12px; border-left: 3px solid;">
+                        <div style="font-weight: bold; color: ${isMe?'#fff':'#0084ff'}">${data.replyTo.sender}</div>
+                        <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;">${data.replyTo.message}</div>
                     </div>`;
     }
 
-    content += `<span class="sender-name" style="color: ${nameColor};">${data.sender} <span class="time">${data.time}</span></span>`;
+    content += `<span class="sender-name" style="color: ${nameColor}; font-size: 11px; font-weight: bold; margin-bottom: 3px; display: block;">${data.sender} <span class="time" style="font-weight: normal; margin-left: 5px; opacity: 0.8;">${data.time}</span></span>`;
     
     const mediaId = 'media_' + Math.random().toString(36).substr(2, 9); 
+    
     if (data.type === 'text') { 
-        content += `<div class="msg-text">${data.message}</div>`; 
+        content += `<div class="msg-text" style="word-wrap: break-word;">${data.message}</div>`; 
     } else if (data.type.startsWith('image/')) { 
-        content += `<img id="${mediaId}" src="${getSecureMediaUrl(data.url, 'image')}" class="chat-img" onclick="openViewer(this.src)">`; 
+        // 🔒 BLURRED SECURE IMAGE BOX
+        content += `
+        <div id="box_${mediaId}" style="width: 220px; height: 160px; background: #ccd0d5; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; overflow: hidden; margin-top: 5px;" onclick="revealImage('${data.url}', '${mediaId}')">
+            <div id="text_${mediaId}" style="position: absolute; z-index: 2; background: rgba(0,0,0,0.6); color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; backdrop-filter: blur(2px);">🔒 Tap to View</div>
+            <img id="img_${mediaId}" src="" style="width: 100%; height: 100%; object-fit: cover; filter: blur(20px); transition: filter 0.3s ease;" />
+        </div>`; 
     } else if (data.type.startsWith('audio/')) {
+        // 🔒 SECURE AUDIO BOX
         const btnBg = isMe ? '#fff' : '#0084ff', iconColor = isMe ? '#0084ff' : '#fff', trackBg = isMe ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.15)', trackFill = isMe ? '#fff' : '#0084ff';
-        content += `<div class="custom-audio">
-                        <audio id="${mediaId}" src="${getSecureMediaUrl(data.url, 'audio')}" preload="metadata" onloadedmetadata="setAudioDuration('${mediaId}')" ontimeupdate="updateChatAudio('${mediaId}')" onended="resetChatAudio('${mediaId}')"></audio>
-                        <button class="play-btn" onclick="toggleChatAudio('${mediaId}')" style="background: ${btnBg}; color: ${iconColor};"><span id="icon_${mediaId}">▶</span></button>
-                        <div class="progress-track" style="background: ${trackBg};" onclick="seekChatAudio(event, '${mediaId}')">
-                            <div id="prog_${mediaId}" class="progress-fill" style="background: ${trackFill};"></div>
+        content += `<div class="custom-audio" style="display: flex; align-items: center; gap: 10px; margin-top: 5px; width: 220px;">
+                        <audio id="${mediaId}" onloadedmetadata="setAudioDuration('${mediaId}')" ontimeupdate="updateChatAudio('${mediaId}')" onended="resetChatAudio('${mediaId}')"></audio>
+                        <button class="play-btn" onclick="playSecureAudio('${data.url}', '${mediaId}')" style="background: ${btnBg}; color: ${iconColor}; border: none; width: 35px; height: 35px; border-radius: 50%; cursor: pointer; flex-shrink: 0; display:flex; justify-content:center; align-items:center;"><span id="icon_${mediaId}">▶</span></button>
+                        <div class="progress-track" style="flex: 1; height: 5px; background: ${trackBg}; border-radius: 5px; position: relative; cursor: pointer;" onclick="seekChatAudio(event, '${mediaId}')">
+                            <div id="prog_${mediaId}" class="progress-fill" style="position: absolute; left: 0; top: 0; height: 100%; width: 0%; background: ${trackFill}; border-radius: 5px;"></div>
                         </div>
-                        <span id="time_${mediaId}" class="audio-time">Voice</span>
+                        <span id="time_${mediaId}" class="audio-time" style="font-size: 11px;">Voice</span>
                     </div>`;
     }
     content += `</div>`;
-    if (isMe) { const seenClass = data.seen ? 'seen' : ''; content += `<div class="seen-dot ${seenClass}" id="seen_${data.msgId}"></div>`; }
+    if (isMe) { const seenClass = data.seen ? 'seen' : ''; content += `<div class="seen-dot ${seenClass}" id="seen_${data.msgId}" style="width: 10px; height: 10px; border-radius: 50%; background: ${data.seen ? '#4caf50' : '#ccc'}; align-self: flex-end; margin-top: 2px;"></div>`; }
     
     div.innerHTML = content; box.appendChild(div);
     
@@ -270,32 +337,23 @@ function appendMessage(data) {
     }
 }
 
+// Swipe to Reply & Other UI Logic Below...
 let isDragging = false; let startX = 0; let swipeEl = null;
-function initSwipe(e, clientX) {
-    const msgNode = e.target.closest('.msg');
-    if(msgNode && !e.target.closest('.play-btn') && !e.target.closest('.progress-track')) {
-        isDragging = true; startX = clientX; swipeEl = msgNode; swipeEl.style.transition = 'none';
-    }
-}
+function initSwipe(e, clientX) { const msgNode = e.target.closest('.msg'); if(msgNode && !e.target.closest('.play-btn') && !e.target.closest('.progress-track')) { isDragging = true; startX = clientX; swipeEl = msgNode; swipeEl.style.transition = 'none'; } }
 function moveSwipe(e, clientX) {
     if(!isDragging || !swipeEl) return;
     const diff = clientX - startX; const isMe = swipeEl.parentElement.style.alignItems === 'flex-end';
-    if((isMe && diff < 0 && diff > -70) || (!isMe && diff > 0 && diff < 70)) {
-        swipeEl.style.transform = `translateX(${diff}px)`;
-        const icon = swipeEl.querySelector('.reply-icon-bg'); if(icon) icon.style.opacity = Math.abs(diff) / 70;
-    }
+    if((isMe && diff < 0 && diff > -70) || (!isMe && diff > 0 && diff < 70)) { swipeEl.style.transform = `translateX(${diff}px)`; const icon = swipeEl.querySelector('.reply-icon-bg'); if(icon) icon.style.opacity = Math.abs(diff) / 70; }
 }
 function endSwipe(e, clientX) {
     if(!isDragging || !swipeEl) return;
     isDragging = false; const diff = clientX - startX;
     swipeEl.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'; swipeEl.style.transform = `translateX(0px)`;
     const icon = swipeEl.querySelector('.reply-icon-bg'); if(icon) icon.style.opacity = 0;
-
     const isMe = swipeEl.parentElement.style.alignItems === 'flex-end';
     if((isMe && diff < -40) || (!isMe && diff > 40)) {
         const senderName = swipeEl.querySelector('.sender-name').childNodes[0].textContent.trim();
-        let msgContent = "Media Content";
-        if(swipeEl.querySelector('.msg-text')) msgContent = swipeEl.querySelector('.msg-text').innerText;
+        let msgContent = "Media Content"; if(swipeEl.querySelector('.msg-text')) msgContent = swipeEl.querySelector('.msg-text').innerText;
         startReply(senderName, msgContent);
     }
     swipeEl = null;
@@ -338,29 +396,13 @@ function updatePreviewTime() { const audio = document.getElementById('audioPrevi
 function resetPreview() { document.getElementById('previewPlayBtn').innerText = "▶"; document.getElementById('previewProgress').style.width = '0%'; }
 function seekPreviewAudio(e) { const audio = document.getElementById('audioPreview'); const rect = e.currentTarget.getBoundingClientRect(); if(!isNaN(audio.duration)) audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration; }
 
-function toggleChatAudio(id) { const audio = document.getElementById(id); const icon = document.getElementById('icon_' + id); document.querySelectorAll('audio').forEach(a => { if(a.id !== id && !a.paused) { a.pause(); document.getElementById('icon_' + a.id).innerText = "▶"; } }); if(audio.paused) { audio.play(); icon.innerText = "⏸"; } else { audio.pause(); icon.innerText = "▶"; } }
-function updateChatAudio(id) { const audio = document.getElementById(id); if(!isNaN(audio.duration)) { document.getElementById('prog_' + id).style.width = ((audio.currentTime / audio.duration) * 100) + '%'; document.getElementById('time_' + id).innerText = formatTime(audio.currentTime); } }
-function setAudioDuration(id) { const audio = document.getElementById(id); const timeSpan = document.getElementById('time_' + id); if (!audio || !timeSpan) return; if (isFinite(audio.duration)) { timeSpan.innerText = formatTime(audio.duration); } }
-function seekChatAudio(e, id) { const audio = document.getElementById(id); const rect = e.currentTarget.getBoundingClientRect(); if(isFinite(audio.duration)) audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration; }
-function resetChatAudio(id) { document.getElementById('icon_' + id).innerText = "▶"; document.getElementById('prog_' + id).style.width = '0%'; setAudioDuration(id); }
-
 async function uploadFileAndSend(file) {
-    const formData = new FormData(); 
-    formData.append('file', file); 
-    formData.append('key', currentRoomKey);
-    formData.append('uid', userProfile.uid); 
-
+    const formData = new FormData(); formData.append('file', file); formData.append('key', currentRoomKey); formData.append('uid', userProfile.uid); 
     try { 
         const res = await fetch('/upload', { method: 'POST', body: formData }); 
         const data = await res.json(); 
-        
-        await fetch('/api/chat/send', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
-            body: JSON.stringify({ roomKey: currentRoomKey, uid: userProfile.uid, sender: userProfile.name, type: data.type, url: data.url, replyTo: replyingTo })
-        });
-        cancelReply();
-        syncChatData();
+        await fetch('/api/chat/send', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`}, body: JSON.stringify({ roomKey: currentRoomKey, uid: userProfile.uid, sender: userProfile.name, type: data.type, url: data.url, replyTo: replyingTo }) });
+        cancelReply(); syncChatData();
     } catch (err) { alert("Upload failed!"); }
 }
 
@@ -368,12 +410,7 @@ async function sendTextMessage() {
     const textInput = document.getElementById('msgInput'); const text = textInput.value.trim();
     if(text && currentRoomKey) { 
         textInput.value = ''; handleTextInput(textInput); cancelReply();
-        
-        await fetch('/api/chat/send', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
-            body: JSON.stringify({ roomKey: currentRoomKey, uid: userProfile.uid, sender: userProfile.name, message: text, type: 'text', replyTo: replyingTo })
-        });
+        await fetch('/api/chat/send', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`}, body: JSON.stringify({ roomKey: currentRoomKey, uid: userProfile.uid, sender: userProfile.name, message: text, type: 'text', replyTo: replyingTo }) });
         syncChatData(); 
     }
 }
