@@ -5,10 +5,11 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const { google } = require('googleapis');
-const { Readable } = require('stream'); // Drive e memory theke upload er jonno lagbe
+const { Readable } = require('stream');
 
 const app = express();
 app.use(express.json());
+// Public folder setup
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Module Connection (register.js theke)
@@ -45,7 +46,7 @@ const User = mongoose.model('User');
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'register.html')));
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat.html')));
 
-// ⚠️ Google Drive Setup (Reading is fine on Vercel, writing is not)
+// ⚠️ Google Drive Setup (Shudhu chabi read korar jonno)
 const DRIVE_MAIN_FOLDER_ID = '1z_UgrqPeBRC_zbX51rexF9Fi1F95Wiym'; 
 let drive;
 try {
@@ -60,16 +61,6 @@ try {
 }
 
 // Helpers
-async function getOrCreateDriveFolder(folderName, parentId) {
-    try {
-        const query = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
-        const res = await drive.files.list({ q: query, fields: 'files(id, name)' });
-        if (res.data.files.length > 0) return res.data.files[0].id; 
-        const folder = await drive.files.create({ resource: { name: folderName, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] }, fields: 'id' });
-        return folder.data.id;
-    } catch (err) { return parentId; }
-}
-
 function extractFileId(url) {
     if (!url) return "";
     if (url.includes('id=')) return url.match(/id=([a-zA-Z0-9_-]+)/)[1];
@@ -77,12 +68,11 @@ function extractFileId(url) {
 }
 
 async function updateActiveStatus(uid, username, isOnline) {
-    const status = await Status.findOneAndUpdate(
+    await Status.findOneAndUpdate(
         { uid },
         { username, online: isOnline, lastSeen: Date.now() },
         { upsert: true, new: true }
     );
-    // Return all statuses for sync
     const allStatuses = await Status.find({});
     const statusMap = {};
     allStatuses.forEach(s => statusMap[s.uid] = s);
@@ -93,7 +83,7 @@ async function updateActiveStatus(uid, username, isOnline) {
 // 🚀 VERCEL READY APIs
 // ==========================================
 
-// Search User (Now from MongoDB)
+// Search User (MongoDB theke)
 app.post('/api/search-user', authenticateToken, async (req, res) => {
     try {
         const { targetUid } = req.body;
@@ -163,23 +153,30 @@ app.post('/api/chat/seen', authenticateToken, async (req, res) => {
     }
 });
 
-// ৪. ⚠️ STEALTH MEDIA API (Google Drive theke Stream)
-app.get('/api/media/:fileId', async (req, res) => {
-    const token = req.query.token;
-    if (!token) return res.status(401).send("Unauthorized");
-    
-    jwt.verify(token, JWT_SECRET, async (err) => {
-        if (err) return res.status(403).send("Forbidden");
-        try {
-            const response = await drive.files.get({ fileId: req.params.fileId, alt: 'media' }, { responseType: 'stream' });
-            res.setHeader('Content-Type', response.headers['content-type']);
-            response.data.pipe(res); 
-        } catch (error) { res.status(404).send("File not found"); }
-    });
+// ৪. ⚠️ SECURE MEDIA TOKEN API (2 Minute Expiry - Drive Hidden)
+app.post('/api/media/token', authenticateToken, (req, res) => {
+    const { fileId } = req.body;
+    // ২ মিনিটের জন্য এনক্রিপ্টেড টোকেন তৈরি
+    const shortToken = jwt.sign({ fileId }, JWT_SECRET, { expiresIn: '2m' });
+    res.json({ url: `/api/media/stream/${shortToken}` });
 });
 
-// ৫. ⚠️ MEDIA UPLOAD API (Memory to Drive - No Folder Created!)
-// Khub guruttopurno: memoryStorage() bebohar kora hoyeche!
+// ৫. ⚠️ SECURE STREAMING API (Link expires in 2 mins)
+app.get('/api/media/stream/:token', async (req, res) => {
+    try {
+        const decoded = jwt.verify(req.params.token, JWT_SECRET);
+        const response = await drive.files.get({ fileId: decoded.fileId, alt: 'media' }, { responseType: 'stream' });
+        
+        // 브라우জারে ক্যাশ কন্ট্রোল (২ মিনিট পর ডিলিট)
+        res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
+        res.setHeader('Cache-Control', 'private, max-age=120'); 
+        response.data.pipe(res); // Vercel server theke data stream hobe
+    } catch (err) {
+        res.status(403).send("⚠️ Token Expired or Invalid");
+    }
+});
+
+// ৬. ⚠️ MEDIA UPLOAD API (Memory to Drive - Super Fast)
 const upload = multer({ storage: multer.memoryStorage() }); 
 
 app.post('/upload', upload.single('file'), async (req, res) => {
@@ -187,23 +184,16 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     if (!req.file || !roomKey || !uid) return res.status(400).json({ error: "Missing data!" });
 
     try {
-        const folderType = req.file.mimetype.startsWith('audio/') ? 'voice' : 'media';
         let fileName = req.file.originalname === 'blob' ? `voice_${Date.now()}.webm` : req.file.originalname;
 
-        // Drive Folder Tree Setup
-        const dbId = await getOrCreateDriveFolder('Database', DRIVE_MAIN_FOLDER_ID);
-        const udId = await getOrCreateDriveFolder('users_data', dbId);
-        const userDriveFolder = await getOrCreateDriveFolder(uid, udId);
-        const mediaDriveFolder = await getOrCreateDriveFolder(folderType, userDriveFolder);
-
-        // Memory (Buffer) theke Stream toiri kora
+        // Memory (RAM) theke Stream toiri kora
         const fileStream = new Readable();
         fileStream.push(req.file.buffer);
         fileStream.push(null);
 
-        // Upload sorasori Drive-e
+        // Upload sorasori Main Folder e (Kono Timeout hobe na)
         const driveFile = await drive.files.create({ 
-            resource: { name: fileName, parents: [mediaDriveFolder] }, 
+            resource: { name: fileName, parents: [DRIVE_MAIN_FOLDER_ID] }, 
             media: { mimeType: req.file.mimetype, body: fileStream }, 
             fields: 'id' 
         });
