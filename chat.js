@@ -46,7 +46,7 @@ const User = mongoose.model('User');
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'register.html')));
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat.html')));
 
-// ⚠️ Google Drive Setup (Shudhu chabi read korar jonno)
+// ⚠️ Google Drive Setup
 const DRIVE_MAIN_FOLDER_ID = '1z_UgrqPeBRC_zbX51rexF9Fi1F95Wiym'; 
 let drive;
 try {
@@ -153,30 +153,22 @@ app.post('/api/chat/seen', authenticateToken, async (req, res) => {
     }
 });
 
-// ৪. ⚠️ SECURE MEDIA TOKEN API (2 Minute Expiry - Drive Hidden)
-app.post('/api/media/token', authenticateToken, (req, res) => {
-    const { fileId } = req.body;
-    // ২ মিনিটের জন্য এনক্রিপ্টেড টোকেন তৈরি
-    const shortToken = jwt.sign({ fileId }, JWT_SECRET, { expiresIn: '2m' });
-    res.json({ url: `/api/media/stream/${shortToken}` });
-});
-
-// ৫. ⚠️ SECURE STREAMING API (Link expires in 2 mins)
-app.get('/api/media/stream/:token', async (req, res) => {
+// ৪. ⚠️ ULTIMATE SECURE BLOB STREAM API (No Links Exposed!)
+app.post('/api/media/secure-stream', authenticateToken, async (req, res) => {
     try {
-        const decoded = jwt.verify(req.params.token, JWT_SECRET);
-        const response = await drive.files.get({ fileId: decoded.fileId, alt: 'media' }, { responseType: 'stream' });
+        const { fileId } = req.body;
+        // Direct Drive theke data ene kono link charai stream kora hocche
+        const response = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'stream' });
         
-        // 브라우জারে ক্যাশ কন্ট্রোল (২ মিনিট পর ডিলিট)
         res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
-        res.setHeader('Cache-Control', 'private, max-age=120'); 
-        response.data.pipe(res); // Vercel server theke data stream hobe
+        res.setHeader('Cache-Control', 'no-store'); // Browser ke cache korte dibe na
+        response.data.pipe(res);
     } catch (err) {
-        res.status(403).send("⚠️ Token Expired or Invalid");
+        res.status(500).send("Stream Error");
     }
 });
 
-// ৬. ⚠️ MEDIA UPLOAD API (Memory to Drive - Super Fast)
+// ৫. ⚠️ MEDIA UPLOAD API (Memory to Drive - Super Fast)
 const upload = multer({ storage: multer.memoryStorage() }); 
 
 app.post('/upload', upload.single('file'), async (req, res) => {
