@@ -16,43 +16,43 @@ document.body.addEventListener('click', () => {
     }
 });
 
-// 1. FB Moto Auto Load & Security
+// 1. FB Moto Auto Load (Token chara LocalStorage bebohar kore)
 window.onload = async function() {
+    // Memory theke user data khuje ber kora
+    const stored = localStorage.getItem('proChatUser');
     token = localStorage.getItem('proChatToken');
-    if (!token) return forceLogout();
+    
+    // Jodi data na thake taholei shudhu logout korbe
+    if (!stored) return forceLogout(); 
     
     try {
-        const res = await fetch('/api/auth/check-auth', { 
-            method: 'POST', 
-            headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`}
-        });
-        const data = await res.json();
+        userProfile = JSON.parse(stored);
         
-        if(data.valid && data.user) {
-            userProfile = data.user;
-            document.getElementById('myName').innerText = userProfile.name;
-            document.getElementById('myUidStr').innerText = userProfile.uid;
+        // Nam ebong UID screen e print korche
+        document.getElementById('myName').innerText = userProfile.name;
+        document.getElementById('myUidStr').innerText = userProfile.uid;
 
-            if(localStorage.getItem('chatSettings')) { userSettings = JSON.parse(localStorage.getItem('chatSettings')); }
-            document.getElementById('toggleNotif').checked = userSettings.notif;
-            document.getElementById('toggleSound').checked = userSettings.sound;
+        // Settings load
+        if(localStorage.getItem('chatSettings')) { userSettings = JSON.parse(localStorage.getItem('chatSettings')); }
+        document.getElementById('toggleNotif').checked = userSettings.notif;
+        document.getElementById('toggleSound').checked = userSettings.sound;
 
-            if(userSettings.notif && Notification.permission !== "granted" && Notification.permission !== "denied") {
-                Notification.requestPermission();
-            }
-            
-            // ⚠️ FB Logic: Ager chat open thakle auto open korbe (Reload Fix)
-            const lastChat = localStorage.getItem('lastChatUser');
-            if (lastChat) {
-                targetUserProfile = JSON.parse(lastChat);
-                openDM(true); // true means auto reload
-            }
-            
-            syncInterval = setInterval(syncChatData, 2000);
-        } else forceLogout();
+        if(userSettings.notif && Notification.permission !== "granted" && Notification.permission !== "denied") {
+            Notification.requestPermission();
+        }
+        
+        // ⚠️ FB Logic: Ager chat open thakle auto open korbe (Reload Fix)
+        const lastChat = localStorage.getItem('lastChatUser');
+        if (lastChat) {
+            targetUserProfile = JSON.parse(lastChat);
+            openDM(true);
+        }
+        
+        syncInterval = setInterval(syncChatData, 2000);
     } catch(e) { forceLogout(); }
 };
 
+// Powerful Logout Function
 function forceLogout() { 
     localStorage.clear(); 
     sessionStorage.clear();
