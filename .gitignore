@@ -1,0 +1,7 @@
+node_modules/
+database/
+rooms/
+uploads/
+client_secret.json
+token.json
+.env
