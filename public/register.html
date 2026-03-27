@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Chat - Auth</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        
+        /* ⚠️ Premium Auth Box Style */
+        .auth-box { background: white; padding: 35px 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); width: 100%; max-width: 380px; text-align: center; box-sizing: border-box; }
+        .logo-text { color: #1877F2; margin-top: 0; margin-bottom: 25px; font-size: 34px; font-weight: 800; letter-spacing: -1px; }
+        
+        .input-group { position: relative; margin-bottom: 12px; }
+        input { width: 100%; padding: 14px 15px; border: 1px solid #ccd0d5; border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; transition: all 0.2s; background: #fff;}
+        input:focus { border-color: #1877F2; box-shadow: 0 0 0 2px #e7f3ff; }
+        
+        .btn-login { width: 100%; padding: 14px; background: #1877F2; color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.2s; margin-top: 5px; }
+        .btn-login:hover { background: #166fe5; }
+        .btn-login:active { transform: scale(0.98); }
+        
+        .btn-create { width: auto; padding: 14px 24px; background: #42b72a; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.2s; }
+        .btn-create:hover { background: #36a420; }
+        .btn-create:active { transform: scale(0.98); }
+        
+        .divider { border-bottom: 1px solid #dadde1; margin: 20px 0; }
+        
+        .auth-links { color: #1877F2; text-decoration: none; font-size: 14px; font-weight: 500; cursor: pointer; display: block; margin-top: 15px; }
+        .auth-links:hover { text-decoration: underline; }
+
+        .fb-row { display: flex; gap: 10px; }
+        
+        #regArea, #otpArea { display: none; }
+
+        /* ⚠️ Dynamic Popup System CSS */
+        #popupOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(5px); display: none; justify-content: center; align-items: center; z-index: 9999; opacity: 0; transition: opacity 0.3s; }
+        #popupOverlay.show { display: flex; opacity: 1; }
+        
+        .popup-box { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); max-width: 320px; width: 90%; text-align: center; transform: scale(0.8); transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        #popupOverlay.show .popup-box { transform: scale(1); }
+        
+        .popup-icon { font-size: 50px; margin-bottom: 15px; }
+        .popup-title { font-size: 22px; font-weight: bold; color: #333; margin: 0 0 10px 0; }
+        .popup-text { font-size: 15px; color: #666; line-height: 1.5; margin-bottom: 20px; }
+        
+        .popup-btn { background: #1877F2; color: white; border: none; padding: 10px 30px; border-radius: 20px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        
+        /* Loading Spinner */
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #1877F2; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    </style>
+</head>
+<body>
+    
+    <div class="auth-box" id="loginArea">
+        <h1 class="logo-text">Pro Chat</h1>
+        <div class="input-group">
+            <input type="email" id="logEmail" placeholder="Email address" autocomplete="off">
+        </div>
+        <div class="input-group">
+            <input type="password" id="logPassword" placeholder="Password">
+        </div>
+        <button class="btn-login" onclick="loginUser()">Log In</button>
+        <span class="auth-links">Forgotten password?</span>
+        <div class="divider"></div>
+        <button class="btn-create" onclick="showReg()">Create new account</button>
+    </div>
+
+    <div class="auth-box" id="regArea" style="max-width: 420px;">
+        <h1 style="font-size: 28px; color: #1c1e21; margin:0;">Sign Up</h1>
+        <p style="color: #606770; margin-top:5px; margin-bottom: 20px;">It's quick and easy.</p>
+        
+        <div class="fb-row">
+            <div class="input-group" style="flex:1;"><input type="text" id="fName" placeholder="First name"></div>
+            <div class="input-group" style="flex:1;"><input type="text" id="sName" placeholder="Surname"></div>
+        </div>
+        <div class="input-group"><input type="email" id="regEmail" placeholder="Email address"></div>
+        <div class="input-group"><input type="password" id="regPassword" placeholder="New password"></div>
+        
+        <p style="font-size: 11px; color: #777; text-align: left; margin: 15px 0;">By clicking Sign Up, you agree to our Terms, Privacy Policy and Cookies Policy.</p>
+        
+        <button class="btn-create" style="width: 70%; padding: 12px; font-size: 18px;" onclick="requestOTP()">Sign Up</button>
+        <br>
+        <span class="auth-links" style="margin-top: 20px;" onclick="showLogin()">Already have an account?</span>
+    </div>
+
+    <div class="auth-box" id="otpArea">
+        <h2 style="margin-top: 0; color: #1c1e21;">Enter Security Code</h2>
+        <p style="color: #606770; font-size: 14px;">We sent a code to your email.<br><b id="displayEmail" style="color: #333;"></b></p>
+        <input type="text" id="otpCode" placeholder="------" maxlength="6" style="text-align: center; letter-spacing: 12px; font-size: 24px; font-weight: bold; margin: 20px 0;">
+        <button class="btn-login" onclick="verifyOTP()">Verify Code</button>
+        <span class="auth-links" onclick="requestOTP()">Didn't get code? Send again</span>
+    </div>
+
+    <div id="popupOverlay">
+        <div class="popup-box">
+            <div id="popupIcon" class="popup-icon"></div>
+            <h3 id="popupTitle" class="popup-title">Title</h3>
+            <p id="popupText" class="popup-text">Message goes here...</p>
+            <button id="popupBtn" class="popup-btn" style="display: none;" onclick="closePopup()">OK</button>
+        </div>
+    </div>
+
+    <script>
+        // Auto Redirect if logged in
+        if(localStorage.getItem('proChatUser')) window.location.href = '/chat';
+
+        function showReg() { document.getElementById('loginArea').style.display = 'none'; document.getElementById('regArea').style.display = 'block'; }
+        function showLogin() { document.getElementById('regArea').style.display = 'none'; document.getElementById('loginArea').style.display = 'block'; }
+
+        // ⚠️ Popup Controller
+        function showPopup(type, title, text) {
+            const overlay = document.getElementById('popupOverlay');
+            const icon = document.getElementById('popupIcon');
+            const btn = document.getElementById('popupBtn');
+            
+            document.getElementById('popupTitle').innerText = title;
+            document.getElementById('popupText').innerText = text;
+            
+            if(type === 'loading') {
+                icon.innerHTML = '<div class="spinner"></div>';
+                btn.style.display = 'none';
+            } else if (type === 'success') {
+                icon.innerHTML = '✅';
+                icon.style.color = '#42b72a';
+                btn.style.display = 'none';
+            } else if (type === 'error') {
+                icon.innerHTML = '⚠️';
+                icon.style.color = '#ff4d4d';
+                btn.style.display = 'inline-block';
+            }
+            
+            overlay.classList.add('show');
+        }
+
+        function closePopup() {
+            document.getElementById('popupOverlay').classList.remove('show');
+        }
+
+        // ⚠️ API Calls with Popup Integration
+        async function loginUser() {
+            const email = document.getElementById('logEmail').value.trim();
+            const password = document.getElementById('logPassword').value.trim();
+            if(!email || !password) return showPopup('error', 'Missing Fields', 'Please enter your email and password.');
+            
+            showPopup('loading', 'Logging In', 'Verifying your credentials...');
+            
+            try {
+                const res = await fetch('/api/auth/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ email, password }) });
+                const data = await res.json();
+                
+                if(data.success) {
+                    showPopup('success', 'Success!', 'Redirecting to your chats...');
+                    localStorage.setItem('proChatUser', JSON.stringify(data.user));
+                    setTimeout(() => { window.location.href = '/chat'; }, 1000);
+                } else {
+                    showPopup('error', 'Login Failed', data.error);
+                }
+            } catch(e) { showPopup('error', 'Connection Error', 'Server is busy right now. Please try again a bit later.'); }
+        }
+
+        async function requestOTP() {
+            const email = document.getElementById('regEmail').value.trim();
+            const password = document.getElementById('regPassword').value.trim();
+            const fName = document.getElementById('fName').value.trim();
+            const sName = document.getElementById('sName').value.trim();
+            
+            if(!email || !password || !fName) return showPopup('error', 'Missing Fields', 'Please fill out all required fields.');
+
+            showPopup('loading', 'Sending OTP', 'Sending a secure code to your email...');
+            
+            try {
+                const res = await fetch('/api/auth/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ firstName: fName, surname: sName, email, password }) });
+                const data = await res.json();
+                
+                if(data.success) {
+                    closePopup();
+                    document.getElementById('regArea').style.display = 'none'; 
+                    document.getElementById('otpArea').style.display = 'block';
+                    document.getElementById('displayEmail').innerText = email;
+                } else {
+                    showPopup('error', 'Registration Failed', data.error);
+                }
+            } catch(e) { showPopup('error', 'Connection Error', 'Failed to connect. Please try again a bit later.'); }
+        }
+
+        async function verifyOTP() {
+            const email = document.getElementById('regEmail').value.trim();
+            const otp = document.getElementById('otpCode').value.trim();
+            if(!otp || otp.length < 6) return showPopup('error', 'Invalid Code', 'Please enter the 6-digit code.');
+
+            // ⚠️ এখানেই গুগল ড্রাইভে ডেটা সেভ হয়, তাই লোডিং পপআপ দেখানো হলো
+            showPopup('loading', 'Creating Account', 'Setting up your secure profile and database. Please wait...');
+            
+            try {
+                const res = await fetch('/api/auth/verify-otp', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ email, otp }) });
+                const data = await res.json();
+                
+                if(data.success) {
+                    // ⚠️ সাকসেস পপআপ এবং রিডাইরেক্ট
+                    showPopup('success', 'Account Created!', `Welcome to Pro Chat, ${data.user.name.split(' ')[0]}!`);
+                    localStorage.setItem('proChatUser', JSON.stringify(data.user));
+                    
+                    // ২ সেকেন্ড পর চ্যাটে নিয়ে যাবে
+                    setTimeout(() => { window.location.href = '/chat'; }, 2000); 
+                } else {
+                    showPopup('error', 'Verification Failed', data.error);
+                }
+            } catch(e) { 
+                showPopup('error', 'Server Busy', 'Data saving is taking longer than usual. Please try again a bit later.'); 
+            }
+        }
+    </script>
+</body>
+</html>

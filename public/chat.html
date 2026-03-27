@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pro Chat - DM</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #e9eaee; padding: 0; margin: 0; display: flex; justify-content: center; align-items: center; height: 100dvh; box-sizing: border-box; overflow: hidden;}
+        .container { width: 100%; max-width: 600px; height: 100dvh; background: white; display: flex; flex-direction: column; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.1); overflow: hidden; }
+        @media (min-width: 600px) { .container { height: 95dvh; border-radius: 12px; } }
+
+        #searchArea { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: #fff; padding: 20px; text-align: center; z-index: 5;}
+        .search-box { width: 100%; max-width: 350px; background: #f0f2f5; padding: 30px 20px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);}
+        .search-input { width: 90%; padding: 14px; border-radius: 8px; border: 1px solid #ccc; font-size: 18px; margin-bottom: 15px; text-align: center; letter-spacing: 2px; outline: none;}
+        .search-input:focus { border-color: #0084ff; }
+        .btn-search { width: 100%; padding: 14px; background: #0084ff; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.2s;}
+        .btn-search:hover { background: #0073e6; }
+        .user-badge { background: #e0f0ff; color: #0084ff; padding: 5px 15px; border-radius: 20px; font-weight: bold; margin-bottom: 20px; display: inline-block;}
+
+        #chatArea { display: none; flex-direction: column; height: 100%; position: relative; }
+        #header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-bottom: 1px solid #eee; background: #fff; z-index: 10; box-shadow: 0 1px 5px rgba(0,0,0,0.05); }
+        .room-info { display: flex; flex-direction: column; }
+        #roomName { color: #0084ff; font-weight: bold; font-size: 18px; line-height: 1.2;}
+        #activeStatusInfo { font-size: 12px; color: #777; margin-top: 2px; font-weight: 500; transition: color 0.3s ease; }
+        .online-text { color: #00E676 !important; }
+        .header-actions { display: flex; gap: 10px; align-items: center;}
+        .back-btn { font-size: 20px; cursor: pointer; color: #555; margin-right: 15px; padding: 5px;}
+        .btn-small { background: #f0f2f5; color: #333; border: none; padding: 8px; border-radius: 50%; cursor: pointer; font-size: 16px; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; transition: 0.2s;}
+        
+        #chatBox { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 20px 15px; background: #f0f2f5; display: flex; flex-direction: column; gap: 6px; scroll-behavior: smooth; }
+        .msg-container { width: 100%; display: flex; flex-direction: column; margin-bottom: 5px; position: relative; }
+        .reply-quote { background: rgba(0,0,0,0.05); border-left: 4px solid #0084ff; padding: 6px 10px; border-radius: 8px; margin-bottom: 5px; font-size: 12px; opacity: 0.8; }
+        .reply-quote-name { font-weight: bold; margin-bottom: 3px; }
+        .msg { padding: 10px 14px; border-radius: 18px; max-width: 80%; width: fit-content; line-height: 1.4; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.1); word-break: break-word; transition: transform 0.2s ease; z-index: 2; }
+        .msg-text { white-space: pre-wrap; word-break: break-word; font-size: 15px; margin-top: 2px; }
+        .sender-name { font-weight: bold; font-size: 12px; margin-bottom: 2px; display: block; }
+        .time { font-size: 10px; margin-left: 10px; opacity: 0.7; font-weight: normal; }
+        .reply-icon-bg { position: absolute; top: 50%; transform: translateY(-50%); font-size: 20px; color: #999; opacity: 0; transition: opacity 0.2s; z-index: 1;}
+        .msg-container[style*="flex-start"] .reply-icon-bg { left: 20px; }
+        .msg-container[style*="flex-end"] .reply-icon-bg { right: 20px; }
+
+        .seen-dot { width: 12px; height: 12px; border-radius: 50%; background: #ccc; margin-top: 4px; margin-right: 8px; align-self: flex-end; transition: all 0.4s ease; box-shadow: inset 0 1px 3px rgba(0,0,0,0.15); }
+        .seen-dot.seen { background: linear-gradient(135deg, #00E676, #1DB954); box-shadow: 0 0 6px rgba(29, 185, 84, 0.6); }
+
+        img.chat-img { max-width: 100%; max-height: 250px; border-radius: 12px; margin-top: 5px; object-fit: cover; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; transition: 0.3s ease; }
+        .custom-audio { display: flex; align-items: center; gap: 12px; margin-top: 5px; width: 230px; max-width: 100%; }
+        .play-btn { width: 42px; height: 42px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; padding-left: 3px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
+        .progress-track { flex: 1; height: 6px; border-radius: 3px; cursor: pointer; position: relative; overflow: hidden; display: flex; align-items: center; }
+        .progress-fill { position: absolute; left: 0; top: 0; height: 100%; width: 0%; border-radius: 3px; transition: width 0.1s linear; pointer-events: none; }
+        .audio-time { font-size: 12px; font-weight: bold; min-width: 35px; text-align: right; }
+
+        .bottom-bar { background: #fff; border-top: 1px solid #ddd; padding-bottom: max(10px, env(safe-area-inset-bottom)); display: flex; flex-direction: column;}
+        #replyContext { display: none; padding: 10px 15px; background: #f0f2f5; border-left: 4px solid #0084ff; font-size: 13px; position: relative; border-bottom: 1px solid #ddd;}
+        #replyContextName { font-weight: bold; color: #0084ff; margin-bottom: 2px;}
+        #replyContextText { color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90%; }
+        .cancel-reply { position: absolute; right: 15px; top: 15px; cursor: pointer; color: #999; font-weight: bold; font-size: 16px;}
+
+        .toolbar { display: flex; gap: 8px; align-items: flex-end; padding: 10px 15px; }
+        .action-icons { display: flex; gap: 4px; }
+        .icon-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #0084ff; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: 0.2s; flex-shrink: 0; width: 40px; height: 40px; margin-bottom: 2px;}
+        textarea#msgInput { flex: 1; padding: 10px 15px; border-radius: 20px; border: 1px solid #ddd; background: #f0f2f5; outline: none; font-size: 15px; resize: none; overflow-y: auto; max-height: 120px; min-height: 44px; box-sizing: border-box; line-height: 1.4; font-family: inherit; }
+        textarea#msgInput::-webkit-scrollbar { width: 0px; } 
+        .send-btn { background: #0084ff; color: white; border: none; padding: 10px 18px; border-radius: 25px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 15px; height: 44px; margin-bottom: 0px; }
+        
+        #recordingUI, #previewUI { display: none; align-items: center; justify-content: space-between; background: #f0f2f5; border-radius: 25px; padding: 5px 15px; flex: 1; height: 40px;}
+        #waveform { width: 120px; height: 30px; }
+        .rec-indicator { color: red; font-size: 14px; font-weight: bold; display: flex; align-items: center; gap: 6px; }
+        .blink { animation: blinker 1s linear infinite; width: 10px; height: 10px; background: red; border-radius: 50%; display: inline-block; }
+        @keyframes blinker { 50% { opacity: 0; } }
+
+        input, button { box-sizing: border-box; }
+
+        #imageViewer { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.85); z-index: 9999; display: none; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.3s ease; backdrop-filter: blur(5px); }
+        #imageViewer.show { display: flex; opacity: 1; }
+        #viewerImg { max-width: 95vw; max-height: 90vh; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); cursor: zoom-in; transition: transform 0.3s ease; object-fit: contain; }
+        #viewerImg.zoomed { transform: scale(2); cursor: zoom-out; }
+        .viewer-controls { position: absolute; top: 20px; right: 20px; display: flex; gap: 15px; z-index: 10000; }
+        .viewer-btn { background: rgba(255, 255, 255, 0.2); color: white; border: none; width: 45px; height: 45px; border-radius: 50%; font-size: 22px; cursor: pointer; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(5px); transition: 0.2s; }
+
+        /* Settings Modal */
+        #settingsModal { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 1000; transform: translateX(100%); transition: transform 0.3s ease; display: flex; flex-direction: column; visibility: hidden;}
+        #settingsModal.show { transform: translateX(0); visibility: visible;}
+        .settings-header { display: flex; align-items: center; padding: 15px 20px; border-bottom: 1px solid #eee; background: #f9f9f9; }
+        .back-btn { font-size: 24px; cursor: pointer; color: #0084ff; margin-right: 15px; }
+        .settings-title { font-weight: bold; font-size: 18px; flex: 1; }
+        .settings-body { padding: 20px; flex: 1; display: flex; flex-direction: column;}
+        .setting-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid #eee; }
+        .setting-label { font-size: 16px; font-weight: 500; color: #333;}
+        
+        .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.2);}
+        input:checked + .slider { background-color: #34C759; }
+        input:checked + .slider:before { transform: translateX(22px); }
+
+        .btn-logout { background: #ff4d4d; color: white; border: none; padding: 14px; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 16px; width: 100%; transition: 0.2s; margin-top: 30px;}
+        .btn-logout:hover { background: #e63939; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        
+        <div id="searchArea">
+            <h2 style="color: #333; margin-bottom: 5px;">Welcome, <span id="myName"></span></h2>
+            <div class="user-badge">UID: <span id="myUidStr"></span></div>
+            
+            <div class="search-box">
+                <h3 style="margin-top: 0; color: #555;">Start a Conversation</h3>
+                <input type="number" id="searchUid" class="search-input" placeholder="Enter Friend's UID">
+                <button class="btn-search" onclick="searchUser()">Message</button>
+                <button style="margin-top:20px; background: none; border:none; color: #ff4d4d; font-weight:bold; cursor:pointer; font-size: 15px;" onclick="forceLogout()">🚪 Logout Account</button>
+            </div>
+        </div>
+
+        <div id="chatArea">
+            <div id="header">
+                <div style="display: flex; align-items: center;">
+                    <span class="back-btn" onclick="goBackToSearch()">❮</span>
+                    <div class="room-info">
+                        <span id="roomName">Loading...</span>
+                        <span id="activeStatusInfo">Connecting...</span>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button class="btn-small" onclick="openSettings()" title="Settings">⚙️</button>
+                </div>
+            </div>
+            
+            <div id="chatBox"></div>
+            
+            <input type="file" id="galleryInput" accept="image/*" style="display: none;" onchange="handleImageUpload(this)">
+            <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="handleImageUpload(this)">
+
+            <div class="bottom-bar">
+                <div id="replyContext">
+                    <div id="replyContextName"></div>
+                    <div id="replyContextText"></div>
+                    <span class="cancel-reply" onclick="cancelReply()">✖</span>
+                </div>
+
+                <div class="toolbar" id="mainToolbar">
+                    <button class="icon-btn" id="toggleBtn" onclick="toggleActionIcons()" style="display: none;" title="More actions">➕</button>
+                    <div class="action-icons" id="actionIcons">
+                        <button class="icon-btn" onclick="document.getElementById('cameraInput').click()" title="Camera">📷</button>
+                        <button class="icon-btn" onclick="document.getElementById('galleryInput').click()" title="Gallery">🖼️</button>
+                        <button class="icon-btn" onclick="startRecording()" title="Voice Record">🎤</button>
+                    </div>
+                    <textarea id="msgInput" placeholder="Message..." rows="1" oninput="handleTextInput(this)"></textarea>
+                    <button class="send-btn" id="sendTextBtn" onclick="sendTextMessage()">Send</button>
+                </div>
+
+                <div id="recordingUI">
+                    <div class="rec-indicator"><span class="blink"></span> <span id="recTimeDisplay">0:00</span></div>
+                    <canvas id="waveform"></canvas>
+                    <button class="icon-btn" style="color:#ff4d4d; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.1); width:35px; height:35px; padding:0; margin:0;" onclick="stopRecording()" title="Stop">⏹</button>
+                </div>
+
+                <div id="previewUI">
+                    <button class="icon-btn" style="color:#ff4d4d; margin:0;" onclick="cancelAudio()">🗑️</button>
+                    <div style="display:flex; align-items:center; gap:10px; flex:1; padding:0 10px;">
+                        <audio id="audioPreview" ontimeupdate="updatePreviewTime()" onended="resetPreview()"></audio>
+                        <button onclick="togglePreview()" id="previewPlayBtn" style="background:#0084ff; color:#fff; border:none; width:35px; height:35px; border-radius:50%; cursor:pointer; font-size:14px; padding-left:3px;">▶</button>
+                        <div class="progress-track" style="background:#ccc;" onclick="seekPreviewAudio(event)">
+                            <div id="previewProgress" class="progress-fill" style="background:#0084ff;"></div>
+                        </div>
+                    </div>
+                    <button class="send-btn" onclick="sendVoiceMessage()">Send</button>
+                </div>
+            </div>
+
+            <div id="settingsModal">
+                <div class="settings-header">
+                    <span class="back-btn" onclick="closeSettings()" style="margin-right: 15px;">❮</span>
+                    <span class="settings-title">Settings</span>
+                </div>
+                <div class="settings-body">
+                    <div class="setting-item">
+                        <span class="setting-label">🔔 Push Notifications</span>
+                        <label class="switch">
+                            <input type="checkbox" id="toggleNotif" onchange="updateSettings()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <span class="setting-label">🎵 Notification Sounds</span>
+                        <label class="switch">
+                            <input type="checkbox" id="toggleSound" onchange="updateSettings()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="imageViewer" onclick="closeViewer(event)">
+        <div class="viewer-controls">
+            <button class="viewer-btn" onclick="downloadImage(event)" title="Download Image">⬇️</button>
+            <button class="viewer-btn" onclick="closeViewer(event, true)" title="Close">✖</button>
+        </div>
+        <img id="viewerImg" src="" alt="Full Screen Image" onclick="toggleZoom(event)">
+    </div>
+
+    <script src="chat_logic.js"></script>
+</body>
+</html>
