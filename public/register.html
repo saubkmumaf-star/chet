@@ -7,7 +7,7 @@
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         
-        /* ⚠️ Premium Auth Box Style */
+        /* Premium Auth Box Style */
         .auth-box { background: white; padding: 35px 30px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); width: 100%; max-width: 380px; text-align: center; box-sizing: border-box; }
         .logo-text { color: #1877F2; margin-top: 0; margin-bottom: 25px; font-size: 34px; font-weight: 800; letter-spacing: -1px; }
         
@@ -32,7 +32,7 @@
         
         #regArea, #otpArea { display: none; }
 
-        /* ⚠️ Dynamic Popup System CSS */
+        /* Dynamic Popup System CSS */
         #popupOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(5px); display: none; justify-content: center; align-items: center; z-index: 9999; opacity: 0; transition: opacity 0.3s; }
         #popupOverlay.show { display: flex; opacity: 1; }
         
@@ -103,13 +103,15 @@
     </div>
 
     <script>
-        // Auto Redirect if logged in
-        if(localStorage.getItem('proChatUser')) window.location.href = '/chat';
+        // Auto Redirect if logged in (Updated to check token as well)
+        if(localStorage.getItem('proChatUser') && localStorage.getItem('proChatToken')) {
+            window.location.href = '/chat';
+        }
 
         function showReg() { document.getElementById('loginArea').style.display = 'none'; document.getElementById('regArea').style.display = 'block'; }
         function showLogin() { document.getElementById('regArea').style.display = 'none'; document.getElementById('loginArea').style.display = 'block'; }
 
-        // ⚠️ Popup Controller
+        // Popup Controller
         function showPopup(type, title, text) {
             const overlay = document.getElementById('popupOverlay');
             const icon = document.getElementById('popupIcon');
@@ -138,7 +140,7 @@
             document.getElementById('popupOverlay').classList.remove('show');
         }
 
-        // ⚠️ API Calls with Popup Integration
+        // API Calls with Popup Integration
         async function loginUser() {
             const email = document.getElementById('logEmail').value.trim();
             const password = document.getElementById('logPassword').value.trim();
@@ -152,7 +154,9 @@
                 
                 if(data.success) {
                     showPopup('success', 'Success!', 'Redirecting to your chats...');
+                    // User data ebong Token save kora hocche
                     localStorage.setItem('proChatUser', JSON.stringify(data.user));
+                    localStorage.setItem('proChatToken', data.token);
                     setTimeout(() => { window.location.href = '/chat'; }, 1000);
                 } else {
                     showPopup('error', 'Login Failed', data.error);
@@ -190,7 +194,6 @@
             const otp = document.getElementById('otpCode').value.trim();
             if(!otp || otp.length < 6) return showPopup('error', 'Invalid Code', 'Please enter the 6-digit code.');
 
-            // ⚠️ এখানেই গুগল ড্রাইভে ডেটা সেভ হয়, তাই লোডিং পপআপ দেখানো হলো
             showPopup('loading', 'Creating Account', 'Setting up your secure profile and database. Please wait...');
             
             try {
@@ -198,11 +201,10 @@
                 const data = await res.json();
                 
                 if(data.success) {
-                    // ⚠️ সাকসেস পপআপ এবং রিডাইরেক্ট
                     showPopup('success', 'Account Created!', `Welcome to Pro Chat, ${data.user.name.split(' ')[0]}!`);
+                    // User data ebong Token save kora hocche
                     localStorage.setItem('proChatUser', JSON.stringify(data.user));
-                    
-                    // ২ সেকেন্ড পর চ্যাটে নিয়ে যাবে
+                    localStorage.setItem('proChatToken', data.token);
                     setTimeout(() => { window.location.href = '/chat'; }, 2000); 
                 } else {
                     showPopup('error', 'Verification Failed', data.error);
