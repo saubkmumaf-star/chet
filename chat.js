@@ -9,7 +9,7 @@ const { Readable } = require('stream'); // Drive e memory theke upload er jonno 
 
 const app = express();
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Module Connection (register.js theke)
 const { router: authRoutes, authenticateToken, JWT_SECRET } = require('./register');
