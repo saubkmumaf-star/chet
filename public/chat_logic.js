@@ -16,22 +16,20 @@ document.body.addEventListener('click', () => {
     }
 });
 
+// 1. FB Moto Auto Load & Security
 window.onload = async function() {
+    token = localStorage.getItem('proChatToken');
     if (!token) return forceLogout();
-    const stored = localStorage.getItem('proChatUser');
-    if (!stored) return forceLogout();
-    
-    userProfile = JSON.parse(stored);
     
     try {
         const res = await fetch('/api/auth/check-auth', { 
             method: 'POST', 
-            headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`}, 
-            body: JSON.stringify({ uid: userProfile.uid }) 
+            headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`}
         });
         const data = await res.json();
         
-        if(data.valid) {
+        if(data.valid && data.user) {
+            userProfile = data.user;
             document.getElementById('myName').innerText = userProfile.name;
             document.getElementById('myUidStr').innerText = userProfile.uid;
 
@@ -43,14 +41,21 @@ window.onload = async function() {
                 Notification.requestPermission();
             }
             
+            // ⚠️ FB Logic: Ager chat open thakle auto open korbe (Reload Fix)
+            const lastChat = localStorage.getItem('lastChatUser');
+            if (lastChat) {
+                targetUserProfile = JSON.parse(lastChat);
+                openDM(true); // true means auto reload
+            }
+            
             syncInterval = setInterval(syncChatData, 2000);
         } else forceLogout();
     } catch(e) { forceLogout(); }
 };
 
 function forceLogout() { 
-    localStorage.removeItem('proChatUser'); 
-    localStorage.removeItem('proChatToken'); 
+    localStorage.clear(); 
+    sessionStorage.clear();
     window.location.href = '/'; 
 }
 
@@ -74,15 +79,21 @@ async function searchUser() {
     } catch(e) { alert("Server Error."); }
 }
 
-function openDM() {
+function openDM(isAutoReload = false) {
     document.getElementById('searchArea').style.display = 'none';
     document.getElementById('chatArea').style.display = 'flex';
     document.getElementById('roomName').innerText = targetUserProfile.name;
     document.getElementById('activeStatusInfo').innerText = "Connecting...";
 
     currentRoomKey = [userProfile.uid, targetUserProfile.uid].sort().join('_');
-    chatHistoryLength = 0;
-    document.getElementById('chatBox').innerHTML = '';
+    
+    // Save chat state for reload
+    localStorage.setItem('lastChatUser', JSON.stringify(targetUserProfile));
+
+    if (!isAutoReload) {
+        chatHistoryLength = 0;
+        document.getElementById('chatBox').innerHTML = '';
+    }
     syncChatData(); 
 }
 
@@ -91,6 +102,7 @@ function goBackToSearch() {
     document.getElementById('searchArea').style.display = 'flex';
     currentRoomKey = null;
     targetUserProfile = null;
+    localStorage.removeItem('lastChatUser'); // Clear saved chat state
 }
 
 function openSettings() { document.getElementById('settingsModal').classList.add('show'); }
@@ -167,7 +179,7 @@ async function syncChatData() {
                 }
             });
         }
-    } catch(e) { console.log("Sync Error", e); }
+    } catch(e) { console.log("Sync Error"); }
 }
 
 document.getElementById('msgInput').addEventListener('keydown', function (e) {
@@ -202,8 +214,10 @@ function startReply(senderName, msgContent) {
 }
 function cancelReply() { replyingTo = null; document.getElementById('replyContext').style.display = 'none'; }
 
+// 2. IMAGE AND VOICE FIX (Super Fast Load from Google Drive)
 function getSecureMediaUrl(fileId) {
-    return `/api/media/${fileId}?token=${token}`;
+    // Vercel server bypass kore sorasori Google Drive theke fetch korbe
+    return `https://drive.google.com/uc?id=${fileId}`;
 }
 
 function appendMessage(data) {
@@ -237,7 +251,7 @@ function appendMessage(data) {
     } else if (data.type.startsWith('audio/')) {
         const btnBg = isMe ? '#fff' : '#0084ff', iconColor = isMe ? '#0084ff' : '#fff', trackBg = isMe ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.15)', trackFill = isMe ? '#fff' : '#0084ff';
         content += `<div class="custom-audio">
-                        <audio id="${mediaId}" src="${getSecureMediaUrl(data.url)}" onloadedmetadata="setAudioDuration('${mediaId}')" ontimeupdate="updateChatAudio('${mediaId}')" onended="resetChatAudio('${mediaId}')"></audio>
+                        <audio id="${mediaId}" src="${getSecureMediaUrl(data.url)}" preload="metadata" onloadedmetadata="setAudioDuration('${mediaId}')" ontimeupdate="updateChatAudio('${mediaId}')" onended="resetChatAudio('${mediaId}')"></audio>
                         <button class="play-btn" onclick="toggleChatAudio('${mediaId}')" style="background: ${btnBg}; color: ${iconColor};"><span id="icon_${mediaId}">▶</span></button>
                         <div class="progress-track" style="background: ${trackBg};" onclick="seekChatAudio(event, '${mediaId}')">
                             <div id="prog_${mediaId}" class="progress-fill" style="background: ${trackFill};"></div>
