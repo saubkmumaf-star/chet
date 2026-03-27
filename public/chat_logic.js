@@ -16,23 +16,18 @@ document.body.addEventListener('click', () => {
     }
 });
 
-// 1. FB Moto Auto Load (Token chara LocalStorage bebohar kore)
 window.onload = async function() {
-    // Memory theke user data khuje ber kora
     const stored = localStorage.getItem('proChatUser');
     token = localStorage.getItem('proChatToken');
     
-    // Jodi data na thake taholei shudhu logout korbe
     if (!stored) return forceLogout(); 
     
     try {
         userProfile = JSON.parse(stored);
         
-        // Nam ebong UID screen e print korche
         document.getElementById('myName').innerText = userProfile.name;
         document.getElementById('myUidStr').innerText = userProfile.uid;
 
-        // Settings load
         if(localStorage.getItem('chatSettings')) { userSettings = JSON.parse(localStorage.getItem('chatSettings')); }
         document.getElementById('toggleNotif').checked = userSettings.notif;
         document.getElementById('toggleSound').checked = userSettings.sound;
@@ -41,7 +36,6 @@ window.onload = async function() {
             Notification.requestPermission();
         }
         
-        // ⚠️ FB Logic: Ager chat open thakle auto open korbe (Reload Fix)
         const lastChat = localStorage.getItem('lastChatUser');
         if (lastChat) {
             targetUserProfile = JSON.parse(lastChat);
@@ -52,7 +46,6 @@ window.onload = async function() {
     } catch(e) { forceLogout(); }
 };
 
-// Powerful Logout Function
 function forceLogout() { 
     localStorage.clear(); 
     sessionStorage.clear();
@@ -87,7 +80,6 @@ function openDM(isAutoReload = false) {
 
     currentRoomKey = [userProfile.uid, targetUserProfile.uid].sort().join('_');
     
-    // Save chat state for reload
     localStorage.setItem('lastChatUser', JSON.stringify(targetUserProfile));
 
     if (!isAutoReload) {
@@ -102,7 +94,7 @@ function goBackToSearch() {
     document.getElementById('searchArea').style.display = 'flex';
     currentRoomKey = null;
     targetUserProfile = null;
-    localStorage.removeItem('lastChatUser'); // Clear saved chat state
+    localStorage.removeItem('lastChatUser'); 
 }
 
 function openSettings() { document.getElementById('settingsModal').classList.add('show'); }
@@ -214,10 +206,15 @@ function startReply(senderName, msgContent) {
 }
 function cancelReply() { replyingTo = null; document.getElementById('replyContext').style.display = 'none'; }
 
-// 2. IMAGE AND VOICE FIX (Super Fast Load from Google Drive)
-function getSecureMediaUrl(fileId) {
-    // Vercel server bypass kore sorasori Google Drive theke fetch korbe
-    return `https://drive.google.com/uc?id=${fileId}`;
+// ⚠️ FIXED: IMAGE AND VOICE URL GENERATOR
+function getSecureMediaUrl(fileId, type) {
+    if (type === 'image') {
+        // Chobir jonno Google Drive er Thumbnail API (Direct load hobe)
+        return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+    } else {
+        // Voice er jonno Raw Download API
+        return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
 }
 
 function appendMessage(data) {
@@ -247,11 +244,11 @@ function appendMessage(data) {
     if (data.type === 'text') { 
         content += `<div class="msg-text">${data.message}</div>`; 
     } else if (data.type.startsWith('image/')) { 
-        content += `<img id="${mediaId}" src="${getSecureMediaUrl(data.url)}" class="chat-img" onclick="openViewer(this.src)">`; 
+        content += `<img id="${mediaId}" src="${getSecureMediaUrl(data.url, 'image')}" class="chat-img" onclick="openViewer(this.src)">`; 
     } else if (data.type.startsWith('audio/')) {
         const btnBg = isMe ? '#fff' : '#0084ff', iconColor = isMe ? '#0084ff' : '#fff', trackBg = isMe ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.15)', trackFill = isMe ? '#fff' : '#0084ff';
         content += `<div class="custom-audio">
-                        <audio id="${mediaId}" src="${getSecureMediaUrl(data.url)}" preload="metadata" onloadedmetadata="setAudioDuration('${mediaId}')" ontimeupdate="updateChatAudio('${mediaId}')" onended="resetChatAudio('${mediaId}')"></audio>
+                        <audio id="${mediaId}" src="${getSecureMediaUrl(data.url, 'audio')}" preload="metadata" onloadedmetadata="setAudioDuration('${mediaId}')" ontimeupdate="updateChatAudio('${mediaId}')" onended="resetChatAudio('${mediaId}')"></audio>
                         <button class="play-btn" onclick="toggleChatAudio('${mediaId}')" style="background: ${btnBg}; color: ${iconColor};"><span id="icon_${mediaId}">▶</span></button>
                         <div class="progress-track" style="background: ${trackBg};" onclick="seekChatAudio(event, '${mediaId}')">
                             <div id="prog_${mediaId}" class="progress-fill" style="background: ${trackFill};"></div>
