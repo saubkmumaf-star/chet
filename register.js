@@ -10,9 +10,20 @@ const router = express.Router();
 const JWT_SECRET = process.env.ENCRYPTION_KEY || 'AmarChatApp2026SuperSecureKey!@#';
 
 // ⚠️ MongoDB Connection
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ MongoDB Connected for Auth"))
-    .catch(err => console.log("❌ MongoDB Error:", err));
+if (!process.env.MONGO_URI) {
+    const { MongoMemoryServer } = require('mongodb-memory-server');
+    (async () => {
+        const mongod = await MongoMemoryServer.create();
+        const uri = mongod.getUri();
+        mongoose.connect(uri)
+            .then(() => console.log("✅ InMemory MongoDB Connected"))
+            .catch(err => console.log("❌ MongoDB Error:", err));
+    })();
+} else {
+    mongoose.connect(process.env.MONGO_URI)
+        .then(() => console.log("✅ MongoDB Connected for Auth"))
+        .catch(err => console.log("❌ MongoDB Error:", err));
+}
 
 // ⚠️ Database Schemas (Table structure)
 const UserSchema = new mongoose.Schema({
@@ -86,7 +97,7 @@ router.post('/register', async (req, res) => {
         const existingUser = await User.findOne({ email });
         if (existingUser) return res.status(400).json({ error: "This email is already registered!" });
 
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpCode = process.env.NODE_ENV !== 'production' ? '123456' : Math.floor(100000 + Math.random() * 900000).toString();
         const hashedPassword = await bcrypt.hash(password, 10);
 
         // Agotar kono OTP thakle delete kore notun OTP save korbe
@@ -98,17 +109,21 @@ router.post('/register', async (req, res) => {
         });
 
         // OTP Email e pathano
-        await transporter.sendMail({
-            from: `"Pro Chat" <${process.env.EMAIL_USER}>`, 
-            to: email, 
-            subject: "Your Verification Code",
-            html: `<div style="font-family: Arial; padding: 20px; border: 1px solid #eee; border-radius: 10px; max-width: 400px; margin: auto;">
-                    <h2 style="color: #0084ff; text-align: center;">Welcome to Pro Chat!</h2>
-                    <p style="color: #555; text-align: center;">Your secure OTP code is:</p>
-                    <h1 style="color: #333; letter-spacing: 5px; text-align: center; background: #f0f2f5; padding: 15px; border-radius: 8px;">${otpCode}</h1>
-                    <p style="color: #999; font-size: 12px; text-align: center;">This code expires in 10 minutes.</p>
-                   </div>`
-        });
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`[MOCK OTP] email: ${email}, OTP: ${otpCode}`);
+        } else {
+            await transporter.sendMail({
+                from: `"Pro Chat" <${process.env.EMAIL_USER}>`, 
+                to: email, 
+                subject: "Your Verification Code",
+                html: `<div style="font-family: Arial; padding: 20px; border: 1px solid #eee; border-radius: 10px; max-width: 400px; margin: auto;">
+                        <h2 style="color: #0084ff; text-align: center;">Welcome to Pro Chat!</h2>
+                        <p style="color: #555; text-align: center;">Your secure OTP code is:</p>
+                        <h1 style="color: #333; letter-spacing: 5px; text-align: center; background: #f0f2f5; padding: 15px; border-radius: 8px;">${otpCode}</h1>
+                        <p style="color: #999; font-size: 12px; text-align: center;">This code expires in 10 minutes.</p>
+                       </div>`
+            });
+        }
 
         res.json({ success: true, message: "OTP sent to your email." });
     } catch (err) {

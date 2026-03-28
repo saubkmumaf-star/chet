@@ -8,6 +8,16 @@ let chatHistoryLength = 0;
 let syncInterval = null;
 let token = localStorage.getItem('proChatToken');
 
+// --- Audio Recording Variables ---
+let mediaRecorder = null;
+let audioChunks = [];
+let recordedBlob = null;
+let recordedAudioUrl = null;
+let recordingStream = null;
+let isRecording = false;
+let recordInterval = null;
+let recordSeconds = 0;
+
 const popSound = new Audio('https://actions.google.com/sounds/v1/water/pop.ogg');
 let soundUnlocked = false;
 
@@ -144,6 +154,21 @@ async function syncChatData() {
             body: JSON.stringify({ roomKey: currentRoomKey, uid: userProfile.uid, name: userProfile.name })
         });
         const data = await res.json();
+        
+        // 1. Update Active Status in UI
+        if (data.statuses && targetUserProfile) {
+            const targetStatus = data.statuses[targetUserProfile.uid];
+            const statusEl = document.getElementById('activeStatusInfo');
+            if (targetStatus && targetStatus.online) {
+                statusEl.innerText = 'Active Now';
+                statusEl.classList.add('online-text');
+            } else {
+                statusEl.innerText = 'Offline';
+                statusEl.classList.remove('online-text');
+            }
+        }
+
+        // 2. Update Chat History
         if(data.history && data.history.length > chatHistoryLength) {
             const newMessages = data.history.slice(chatHistoryLength);
             newMessages.forEach(msg => appendMessage(msg));
@@ -215,3 +240,108 @@ async function uploadFileAndSend(file) {
 }
 
 function handleImageUpload(input) { if(input.files[0]) uploadFileAndSend(input.files[0]); }
+
+// 6. Voice Recording Logic
+async function startRecording() {
+    try {
+        recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(recordingStream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) audioChunks.push(event.data);
+        };
+
+        mediaRecorder.onstop = () => {
+            recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            recordedAudioUrl = URL.createObjectURL(recordedBlob);
+            const previewAudio = document.getElementById('audioPreview');
+            previewAudio.src = recordedAudioUrl;
+            
+            document.getElementById('recordingUI').style.display = 'none';
+            document.getElementById('previewUI').style.display = 'flex';
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        
+        // UI Updates for Recording
+        document.getElementById('mainToolbar').style.display = 'none';
+        document.getElementById('recordingUI').style.display = 'flex';
+        
+        recordSeconds = 0;
+        document.getElementById('recTimeDisplay').innerText = "0:00";
+        recordInterval = setInterval(() => {
+            recordSeconds++;
+            const mins = Math.floor(recordSeconds / 60);
+            const secs = recordSeconds % 60;
+            document.getElementById('recTimeDisplay').innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        }, 1000);
+    } catch (err) {
+        alert("Microphone permission denied or not supported.");
+    }
+}
+
+function stopRecording() {
+    if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        clearInterval(recordInterval);
+        recordingStream.getTracks().forEach(track => track.stop());
+    }
+}
+
+function cancelAudio() {
+    recordedBlob = null;
+    recordedAudioUrl = null;
+    document.getElementById('audioPreview').src = "";
+    document.getElementById('previewProgress').style.width = "0%";
+    
+    document.getElementById('previewUI').style.display = 'none';
+    document.getElementById('mainToolbar').style.display = 'flex';
+}
+
+function togglePreview() {
+    const audio = document.getElementById('audioPreview');
+    const playBtn = document.getElementById('previewPlayBtn');
+    if (audio.paused) {
+        audio.play();
+        playBtn.innerText = "⏸";
+    } else {
+        audio.pause();
+        playBtn.innerText = "▶";
+    }
+}
+
+function updatePreviewTime() {
+    const audio = document.getElementById('audioPreview');
+    if (audio.duration) {
+        const percent = (audio.currentTime / audio.duration) * 100;
+        document.getElementById('previewProgress').style.width = percent + "%";
+    }
+}
+
+function seekPreviewAudio(event) {
+    const track = event.currentTarget;
+    const clickX = event.offsetX;
+    const width = track.offsetWidth;
+    const progress = clickX / width;
+    const audio = document.getElementById('audioPreview');
+    if (audio.duration) {
+        audio.currentTime = progress * audio.duration;
+    }
+}
+
+function resetPreview() {
+    const playBtn = document.getElementById('previewPlayBtn');
+    playBtn.innerText = "▶";
+    document.getElementById('previewProgress').style.width = "0%";
+}
+
+function sendVoiceMessage() {
+    if (recordedBlob) {
+        const file = new File([recordedBlob], 'blob', { type: 'audio/webm' });
+        uploadFileAndSend(file);
+        cancelAudio();
+    }
+}
