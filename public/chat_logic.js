@@ -159,9 +159,22 @@ async function syncChatData() {
         if (data.statuses && targetUserProfile) {
             const targetStatus = data.statuses[targetUserProfile.uid];
             const statusEl = document.getElementById('activeStatusInfo');
-            if (targetStatus && targetStatus.online) {
-                statusEl.innerText = 'Active Now';
-                statusEl.classList.add('online-text');
+            if (targetStatus) {
+                const diffMs = Date.now() - (targetStatus.lastSeen || 0);
+                if (diffMs < 10000) { 
+                    statusEl.innerText = 'Active Now';
+                    statusEl.classList.add('online-text');
+                } else {
+                    const diffMins = Math.floor(diffMs / 60000);
+                    let text = "Offline";
+                    if (diffMins < 1) text = "Last seen just now";
+                    else if (diffMins < 60) text = `Last seen ${diffMins}m ago`;
+                    else if (diffMins < 1440) text = `Last seen ${Math.floor(diffMins/60)}h ago`;
+                    else text = `Last seen ${Math.floor(diffMins/1440)}d ago`;
+                    
+                    statusEl.innerText = text;
+                    statusEl.classList.remove('online-text');
+                }
             } else {
                 statusEl.innerText = 'Offline';
                 statusEl.classList.remove('online-text');

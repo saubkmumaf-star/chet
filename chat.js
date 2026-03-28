@@ -204,21 +204,28 @@ app.post('/upload', upload.single('file'), async (req, res) => {
     if (!req.file || !roomKey || !uid) return res.status(400).json({ error: "Missing data!" });
 
     try {
-        let fileName = req.file.originalname === 'blob' ? `voice_${Date.now()}.webm` : req.file.originalname;
+        const user = await User.findOne({ uid });
+        let targetFolderId = DRIVE_MAIN_FOLDER_ID;
+        
+        let isVoice = req.file.originalname === 'blob' || req.file.mimetype.includes('audio');
+        let fileName = isVoice ? `voice_${Date.now()}.webm` : req.file.originalname;
+
+        if (user && user.driveFolders) {
+            targetFolderId = isVoice ? user.driveFolders.voice : user.driveFolders.media;
+        }
 
         // Memory (RAM) theke Stream toiri kora
         const fileStream = new Readable();
         fileStream.push(req.file.buffer);
         fileStream.push(null);
 
-        // Upload sorasori Main Folder e (Kono Timeout hobe na)
+        // Upload sorasori User Specific Folder e
         const driveFile = await drive.files.create({ 
-            resource: { name: fileName, parents: [DRIVE_MAIN_FOLDER_ID] }, 
+            resource: { name: fileName, parents: [targetFolderId] }, 
             media: { mimeType: req.file.mimetype, body: fileStream }, 
             fields: 'id' 
         });
         
-        // ❌ role: 'reader', type: 'anyone' call kora dorkar nai. File purely private thakbe.
         const encryptedUrl = encryptFileId(driveFile.data.id);
 
         res.json({ url: encryptedUrl, type: req.file.mimetype });

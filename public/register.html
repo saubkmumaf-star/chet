@@ -194,18 +194,20 @@
             const otp = document.getElementById('otpCode').value.trim();
             if(!otp || otp.length < 6) return showPopup('error', 'Invalid Code', 'Please enter the 6-digit code.');
 
-            showPopup('loading', 'Creating Account', 'Setting up your secure profile and database. Please wait...');
+            showPopup('loading', 'Creating Account', 'Please wait, your account is being created and secure server files are being readied...');
             
             try {
                 const res = await fetch('/api/auth/verify-otp', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ email, otp }) });
                 const data = await res.json();
                 
                 if(data.success) {
-                    showPopup('success', 'Account Created!', `Welcome to Pro Chat, ${data.user.name.split(' ')[0]}!`);
-                    // User data ebong Token save kora hocche
-                    localStorage.setItem('proChatUser', JSON.stringify(data.user));
-                    localStorage.setItem('proChatToken', data.token);
-                    setTimeout(() => { window.location.href = '/chat'; }, 2000); 
+                    showPopup('success', 'Welcome!', `Account and server files are ready. You can now log in, ${data.user.name.split(' ')[0]}!`);
+                    setTimeout(() => { 
+                        closePopup();
+                        document.getElementById('otpArea').style.display = 'none';
+                        document.getElementById('logEmail').value = email;
+                        showLogin();
+                    }, 4000); 
                 } else {
                     showPopup('error', 'Verification Failed', data.error);
                 }

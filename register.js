@@ -3,6 +3,9 @@ const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
+const { google } = require('googleapis');
+const fs = require('fs');
+const path = require('path');
 
 const router = express.Router();
 
@@ -31,7 +34,8 @@ const UserSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     fullName: { type: String, required: true },
-    joinedAt: { type: Date, default: Date.now }
+    joinedAt: { type: Date, default: Date.now },
+    driveFolders: { type: Object, default: {} }
 });
 const User = mongoose.model('User', UserSchema);
 
@@ -142,19 +146,42 @@ router.post('/verify-otp', async (req, res) => {
 
         // Database e notun user toiri kora
         const newUid = await generateUID();
+        
+        // --- Create Google Drive Folders ---
+        const credentials = JSON.parse(fs.readFileSync(path.join(__dirname, 'client_secret.json')));
+        const { client_secret, client_id, redirect_uris } = credentials.installed || credentials.web;
+        const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+        oAuth2Client.setCredentials(JSON.parse(fs.readFileSync(path.join(__dirname, 'token.json'))));
+        const drive = google.drive({ version: 'v3', auth: oAuth2Client });
+
+        const DRIVE_MAIN_FOLDER_ID = '1z_UgrqPeBRC_zbX51rexF9Fi1F95Wiym';
+
+        const baseFolder = await drive.files.create({ resource: { name: newUid, mimeType: 'application/vnd.google-apps.folder', parents: [DRIVE_MAIN_FOLDER_ID] }, fields: 'id' });
+        const baseId = baseFolder.data.id;
+
+        const chatFolder = await drive.files.create({ resource: { name: 'chat', mimeType: 'application/vnd.google-apps.folder', parents: [baseId] }, fields: 'id' });
+        const mediaFolder = await drive.files.create({ resource: { name: 'media', mimeType: 'application/vnd.google-apps.folder', parents: [baseId] }, fields: 'id' });
+        const voiceFolder = await drive.files.create({ resource: { name: 'voice', mimeType: 'application/vnd.google-apps.folder', parents: [baseId] }, fields: 'id' });
+
+        const userInfoText = `Name: ${otpRecord.userData.firstName} ${otpRecord.userData.surname}\nEmail: ${otpRecord.userData.email}\nPassword: ${otpRecord.userData.password}\nUID: ${newUid}`;
+        const { Readable } = require('stream');
+        const infoStream = new Readable();
+        infoStream.push(userInfoText);
+        infoStream.push(null);
+        await drive.files.create({ resource: { name: 'user_info.txt', parents: [baseId] }, media: { mimeType: 'text/plain', body: infoStream }, fields: 'id' });
+
         const newUser = new User({
             uid: newUid,
             email: otpRecord.userData.email,
             password: otpRecord.userData.password,
-            fullName: `${otpRecord.userData.firstName} ${otpRecord.userData.surname}`
+            fullName: `${otpRecord.userData.firstName} ${otpRecord.userData.surname}`,
+            driveFolders: { base: baseId, chat: chatFolder.data.id, media: mediaFolder.data.id, voice: voiceFolder.data.id }
         });
 
         await newUser.save();          // User Save holo MongoDB te
         await Otp.deleteOne({ email }); // Kaj sheshe OTP delete kora holo
 
-        const token = jwt.sign({ uid: newUser.uid, email: newUser.email }, JWT_SECRET, { expiresIn: '7d' });
-
-        res.json({ success: true, user: { uid: newUser.uid, name: newUser.fullName, email: newUser.email }, token });
+        res.json({ success: true, user: { uid: newUser.uid, name: newUser.fullName, email: newUser.email } });
     } catch (error) {
         console.error("Registration Error:", error);
         res.status(500).json({ error: "Server is setting up your data. Please try again a bit later." });
