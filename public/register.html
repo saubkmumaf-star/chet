@@ -75,6 +75,14 @@
             <div class="input-group" style="flex:1;"><input type="text" id="fName" placeholder="First name"></div>
             <div class="input-group" style="flex:1;"><input type="text" id="sName" placeholder="Surname"></div>
         </div>
+        <div class="input-group">
+            <select id="regGender" style="width: 100%; padding: 14px 15px; border: 1px solid #ccd0d5; border-radius: 8px; font-size: 16px; outline: none; background: #fff;">
+                <option value="" disabled selected>Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Custom">Custom</option>
+            </select>
+        </div>
         <div class="input-group"><input type="email" id="regEmail" placeholder="Email address"></div>
         <div class="input-group"><input type="password" id="regPassword" placeholder="New password"></div>
         
@@ -169,13 +177,14 @@
             const password = document.getElementById('regPassword').value.trim();
             const fName = document.getElementById('fName').value.trim();
             const sName = document.getElementById('sName').value.trim();
+            const gender = document.getElementById('regGender').value;
             
-            if(!email || !password || !fName) return showPopup('error', 'Missing Fields', 'Please fill out all required fields.');
+            if(!email || !password || !fName || !gender) return showPopup('error', 'Missing Fields', 'Please fill out all required fields including Gender.');
 
             showPopup('loading', 'Sending OTP', 'Sending a secure code to your email...');
             
             try {
-                const res = await fetch('/api/auth/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ firstName: fName, surname: sName, email, password }) });
+                const res = await fetch('/api/auth/register', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ firstName: fName, surname: sName, email, password, gender }) });
                 const data = await res.json();
                 
                 if(data.success) {

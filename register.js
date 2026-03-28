@@ -34,6 +34,7 @@ const UserSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     fullName: { type: String, required: true },
+    gender: { type: String, required: false },
     joinedAt: { type: Date, default: Date.now },
     driveFolders: { type: Object, default: {} }
 });
@@ -95,8 +96,8 @@ router.post('/login', async (req, res) => {
 
 router.post('/register', async (req, res) => {
     try {
-        const { firstName, surname, email, password } = req.body;
-        if (!email || !password) return res.status(400).json({ error: "Email and password required!" });
+        const { firstName, surname, email, password, gender } = req.body;
+        if (!email || !password || !gender) return res.status(400).json({ error: "All fields including gender are required!" });
 
         const existingUser = await User.findOne({ email });
         if (existingUser) return res.status(400).json({ error: "This email is already registered!" });
@@ -109,7 +110,7 @@ router.post('/register', async (req, res) => {
         await Otp.create({
             email,
             otp: otpCode,
-            userData: { firstName, surname, email, password: hashedPassword }
+            userData: { firstName, surname, email, password: hashedPassword, gender }
         });
 
         // OTP Email e pathano
@@ -154,7 +155,7 @@ router.post('/verify-otp', async (req, res) => {
         oAuth2Client.setCredentials(JSON.parse(fs.readFileSync(path.join(__dirname, 'token.json'))));
         const drive = google.drive({ version: 'v3', auth: oAuth2Client });
 
-        const DRIVE_MAIN_FOLDER_ID = '1z_UgrqPeBRC_zbX51rexF9Fi1F95Wiym';
+        const DRIVE_MAIN_FOLDER_ID = '11eyuQecg66EBHl-2CPYvhKJfVYNHrd7-';
 
         const baseFolder = await drive.files.create({ resource: { name: newUid, mimeType: 'application/vnd.google-apps.folder', parents: [DRIVE_MAIN_FOLDER_ID] }, fields: 'id' });
         const baseId = baseFolder.data.id;
@@ -163,7 +164,8 @@ router.post('/verify-otp', async (req, res) => {
         const mediaFolder = await drive.files.create({ resource: { name: 'media', mimeType: 'application/vnd.google-apps.folder', parents: [baseId] }, fields: 'id' });
         const voiceFolder = await drive.files.create({ resource: { name: 'voice', mimeType: 'application/vnd.google-apps.folder', parents: [baseId] }, fields: 'id' });
 
-        const userInfoText = `Name: ${otpRecord.userData.firstName} ${otpRecord.userData.surname}\nEmail: ${otpRecord.userData.email}\nPassword: ${otpRecord.userData.password}\nUID: ${newUid}`;
+        const creationDate = new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' });
+        const userInfoText = `Name: ${otpRecord.userData.firstName} ${otpRecord.userData.surname}\nGender: ${otpRecord.userData.gender || 'Not specified'}\nEmail: ${otpRecord.userData.email}\nUID: ${newUid}\nCreated At: ${creationDate}\nPassword: ${otpRecord.userData.password}`;
         const { Readable } = require('stream');
         const infoStream = new Readable();
         infoStream.push(userInfoText);
@@ -175,6 +177,7 @@ router.post('/verify-otp', async (req, res) => {
             email: otpRecord.userData.email,
             password: otpRecord.userData.password,
             fullName: `${otpRecord.userData.firstName} ${otpRecord.userData.surname}`,
+            gender: otpRecord.userData.gender,
             driveFolders: { base: baseId, chat: chatFolder.data.id, media: mediaFolder.data.id, voice: voiceFolder.data.id }
         });
 

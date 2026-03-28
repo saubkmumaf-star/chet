@@ -74,7 +74,7 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'register
 app.get('/chat', (req, res) => res.sendFile(path.join(__dirname, 'public', 'chat.html')));
 
 // ⚠️ Google Drive Setup
-const DRIVE_MAIN_FOLDER_ID = '1z_UgrqPeBRC_zbX51rexF9Fi1F95Wiym'; 
+const DRIVE_MAIN_FOLDER_ID = '11eyuQecg66EBHl-2CPYvhKJfVYNHrd7-'; 
 let drive;
 try {
     const credentials = JSON.parse(fs.readFileSync(path.join(__dirname, 'client_secret.json')));
