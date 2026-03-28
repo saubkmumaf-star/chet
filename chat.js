@@ -6,7 +6,6 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const { google } = require('googleapis');
 const { Readable } = require('stream');
-const crypto = require('crypto');
 
 const app = express();
 app.use(express.json());
@@ -16,32 +15,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Module Connection (register.js theke)
 const { router: authRoutes, authenticateToken, JWT_SECRET } = require('./register');
 app.use('/api/auth', authRoutes);
-
-// Crypto Setup (Drive ID Hide korar jonno)
-const ENCRYPTION_KEY = crypto.createHash('sha256').update(JWT_SECRET).digest();
-const IV_LENGTH = 16;
-
-function encryptFileId(text) {
-    const iv = crypto.randomBytes(IV_LENGTH);
-    const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    return iv.toString('hex') + ':' + encrypted;
-}
-
-function decryptFileId(text) {
-    try {
-        if (!text || !text.includes(':')) return text; // Backward compatibility for old files
-        const [ivHex, encryptedHex] = text.split(':');
-        const iv = Buffer.from(ivHex, 'hex');
-        const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
-        let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
-        decrypted += decipher.final('utf8');
-        return decrypted;
-    } catch (e) {
-        return text;
-    }
-}
 
 // MongoDB Chat Schemas (Text Message o Active Status er jonno)
 const MessageSchema = new mongoose.Schema({
@@ -184,9 +157,8 @@ app.post('/api/chat/seen', authenticateToken, async (req, res) => {
 app.post('/api/media/secure-stream', authenticateToken, async (req, res) => {
     try {
         const { fileId } = req.body;
-        const realFileId = decryptFileId(fileId);
         // Direct Drive theke data ene kono link charai stream kora hocche
-        const response = await drive.files.get({ fileId: realFileId, alt: 'media' }, { responseType: 'stream' });
+        const response = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'stream' });
         
         res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
         res.setHeader('Cache-Control', 'no-store'); // Browser ke cache korte dibe na
@@ -218,10 +190,9 @@ app.post('/upload', upload.single('file'), async (req, res) => {
             fields: 'id' 
         });
         
-        // ❌ role: 'reader', type: 'anyone' call kora dorkar nai. File purely private thakbe.
-        const encryptedUrl = encryptFileId(driveFile.data.id);
+        await drive.permissions.create({ fileId: driveFile.data.id, requestBody: { role: 'reader', type: 'anyone' } });
 
-        res.json({ url: encryptedUrl, type: req.file.mimetype });
+        res.json({ url: driveFile.data.id, type: req.file.mimetype });
     } catch (error) { 
         console.error("Upload Error:", error);
         res.status(500).json({ error: "Upload failed" }); 
